@@ -1,16 +1,10 @@
 /*
-Copyright (c) 2016, Cypress Semiconductor Corporation
+Copyright (c) 2020, Golftronics, LLC
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
-modification, are permitted provided that the following conditions are met:
+modification is not permitted.
 
-* Redistributions of source code must retain the above copyright notice, this
-  list of conditions and the following disclaimer.
-
-* Redistributions in binary form must reproduce the above copyright notice,
-  this list of conditions and the following disclaimer in the documentation
-  and/or other materials provided with the distribution.
 
 THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
 AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
@@ -24,11 +18,10 @@ OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 
-For more information on Cypress BLE products visit:
-http://www.cypress.com/products/bluetooth-low-energy-ble
+
  */
 
-package com.cypress.academy.ble101_robot;
+package com.golftronics.golfball.ble;
 
 import android.app.Activity;
 import android.content.BroadcastReceiver;
@@ -37,24 +30,28 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.ServiceConnection;
-import android.graphics.Canvas;
-import android.graphics.ColorFilter;
-import android.graphics.Paint;
-import android.graphics.PixelFormat;
-import android.graphics.drawable.Drawable;
-import android.graphics.drawable.ShapeDrawable;
-import android.graphics.drawable.shapes.OvalShape;
+import android.net.Uri;
 import android.os.Bundle;
 import android.os.IBinder;
+
+import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.fragment.app.FragmentManager;
+import androidx.fragment.app.FragmentTransaction;
+import androidx.lifecycle.LiveData;
+import androidx.lifecycle.Observer;
+import androidx.lifecycle.ViewModelProvider;
+import androidx.lifecycle.ViewModelProviders;
+
 import android.util.Log;
 import android.view.View;
 import android.widget.AdapterView;
 import android.widget.ArrayAdapter;
 import android.widget.CompoundButton;
-import android.widget.ImageView;
-import android.widget.SeekBar;
+import android.widget.EditText;
+import android.widget.FrameLayout;
 import android.widget.Spinner;
+import android.widget.SpinnerAdapter;
 import android.widget.Switch;
 import android.widget.TextView;
 import android.widget.Button;
@@ -62,7 +59,7 @@ import android.media.MediaPlayer;
 import android.media.AudioManager;
 import android.widget.Toast;
 
-import java.text.DecimalFormat;
+import java.util.List;
 
 /**
  * This Activity provides the user interface to control the robot.  The Activity
@@ -76,12 +73,14 @@ import java.text.DecimalFormat;
 
 
 
-public class ControlActivity extends AppCompatActivity {
+public class ControlActivity extends AppCompatActivity implements BlankFragment.OnFragmentInteractionListener  {
 
 
+
+    private PuttViewModel puttViewModel;
 
     // Objects to access the layout items for Tach, Buttons, and Seek bars
-    private static TextView mLastMissedText;
+    public static TextView mLastMissedText;
     private static TextView mTachRightText;
     private static TextView mTachMiddleText;
     private static TextView mTachBottomText;
@@ -93,6 +92,8 @@ public class ControlActivity extends AppCompatActivity {
     private static TextView mputtMadeText;
     private static TextView mputtMadeTextOld;
     private static TextView mPowerText;
+    private static TextView mVelocityFallOff;
+    private static TextView mvelocityMax;
     public static double Velocity2;
     public static double maxAccelx;
     public static double maxAccely;
@@ -103,6 +104,7 @@ public class ControlActivity extends AppCompatActivity {
     public static double puttVelocity;
     public static double puttVelocityOld;
     public static Button ready_button;
+    public static Button stats_button;
     public static int puttMadeOld;
     public static double puttRollDistanceOld = 0.0;
     public static int playingSound = 0;
@@ -118,9 +120,16 @@ public class ControlActivity extends AppCompatActivity {
     public static int badReadingFlag = 0;
     public static int ballStoppedFlag = 0;
 
+    private FrameLayout fragmentContainer;
 
-
-
+    public int puttNumber = 0;
+    public double longestMadeDistanceOld = 0.0;
+    public Boolean puttIsMade = false;
+    public double longestMadeDistanceMax = 0.0;
+    public double velocityChangePerFoot = 0.0;
+    public double slope = 0.0;
+    public String slopeSelected;
+    public double velocityFallOff = 0;
 
 
 
@@ -132,7 +141,7 @@ public class ControlActivity extends AppCompatActivity {
     private static final String TAG = ControlActivity.class.getSimpleName();
 
     private static String mDeviceAddress;
-    private static PSoCBleRobotService mPSoCBleRobotService;
+    private static BleGolfballService mBleGolfballService;
 
     /**
      * This manages the lifecycle of the BLE service.
@@ -143,18 +152,18 @@ public class ControlActivity extends AppCompatActivity {
         @Override
         public void onServiceConnected(ComponentName componentName, IBinder service) {
             Log.i(TAG, "onServiceConnected");
-            mPSoCBleRobotService = ((PSoCBleRobotService.LocalBinder) service).getService();
-            if (!mPSoCBleRobotService.initialize()) {
+            mBleGolfballService = ((BleGolfballService.LocalBinder) service).getService();
+            if (!mBleGolfballService.initialize()) {
                 Log.e(TAG, "Unable to initialize Bluetooth");
                 finish();
             }
             // Automatically connects to the car database upon successful start-up initialization.
-            mPSoCBleRobotService.connect(mDeviceAddress);
+            mBleGolfballService.connect(mDeviceAddress);
         }
 
         @Override
         public void onServiceDisconnected(ComponentName componentName) {
-            mPSoCBleRobotService = null;
+            mBleGolfballService = null;
         }
     };
 
@@ -163,6 +172,49 @@ public class ControlActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
 
         setContentView(R.layout.activity_control);
+
+        mLastMissedText = (TextView) findViewById(R.id.last_missed);
+
+        puttViewModel = new ViewModelProvider(this, ViewModelProvider
+                .AndroidViewModelFactory.getInstance(this.getApplication()))
+                .get(PuttViewModel.class);
+
+        /*puttViewModel.getAllPutts().observe(this, new Observer<List<PuttData>>() {
+            @Override
+            public void onChanged(List<PuttData> puttData) {
+
+
+            }
+
+
+
+
+        });*/
+
+        puttViewModel.getAllLongPutts().observe(this, new Observer<Integer>() {
+            @Override
+            public void onChanged(@Nullable Integer integer) {
+                mLastMissedText.setText(String.valueOf(integer));
+            }
+        });
+
+
+
+        /*puttViewModel.getAllLongPutts().observe(this, new Observer<Integer>() {
+            @Override
+            public void onChanged(Integer integer) {
+
+
+                mLastMissedText.setText(integer);
+
+            }
+        });*/
+
+
+
+
+
+
 
 
 
@@ -175,12 +227,19 @@ public class ControlActivity extends AppCompatActivity {
         mputtMadeText = (TextView) findViewById(R.id.puttMade);
         mPowerText = (TextView) findViewById(R.id.Power);
         mrollDistanceText = (TextView) findViewById(R.id.rollDistance);
+        mVelocityFallOff = (TextView) findViewById(R.id.velocity_falloff);
+        mvelocityMax = (TextView) findViewById(R.id.velocity_max);
 
         mled_switch = (Switch) findViewById(R.id.led_switch);
         ready_button = (Button) findViewById(R.id.ready_button);
+        stats_button = (Button) findViewById(R.id .stats);
 
         final Intent intent = getIntent();
         mDeviceAddress = intent.getStringExtra(ScanActivity.EXTRAS_BLE_ADDRESS);
+
+
+        fragmentContainer = (FrameLayout) findViewById(R.id.fragment_container);
+
 
 
 
@@ -189,14 +248,12 @@ public class ControlActivity extends AppCompatActivity {
 
         // Create an ArrayAdapter using the string array and a default spinner layout
         ArrayAdapter<CharSequence> adapter = ArrayAdapter.createFromResource(this,
-                R.array.planets_array, android.R.layout.simple_spinner_item);
+                R.array.slope_array, android.R.layout.simple_spinner_item);
         // Specify the layout to use when the list of choices appears
         adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
         // Apply the adapter to the spinner
         spinner.setAdapter(adapter);
-
-
-
+        spinner.getSelectedItem();
 
 
         
@@ -211,37 +268,62 @@ public class ControlActivity extends AppCompatActivity {
 
         // Bind to the BLE service
         Log.i(TAG, "Binding Service");
-        Intent RobotServiceIntent = new Intent(this, PSoCBleRobotService.class);
+        Intent RobotServiceIntent = new Intent(this, BleGolfballService.class);
         bindService(RobotServiceIntent, mServiceConnection, BIND_AUTO_CREATE);
 
         /* This will be called when the LED On/Off switch is touched */
         mled_switch.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener()
         {
             public void onCheckedChanged(CompoundButton buttonView, boolean isChecked){
-                mPSoCBleRobotService.writeLedCharacteristic(isChecked);
+                mBleGolfballService.writeLedCharacteristic(isChecked);
             }
         });
 
         ready_button.setOnClickListener(new View.OnClickListener()
         {
             public void onClick(View v){
-                mPSoCBleRobotService.writeReadyCharacteristic(true);
+                mBleGolfballService.writeReadyCharacteristic(true);
             }
         });
 
+        stats_button.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                openFragment();
+            }
+        });
+
+
+        if(puttMadeFlag == 1){
+
+
+            Toast.makeText(this, "test",Toast.LENGTH_SHORT).show();
+
+        }
 
 
     } /* End of onCreate method */
 
 
+    public void openFragment(){
+        BlankFragment fragment = BlankFragment.newInstance();
+        FragmentManager fragmentManager =getSupportFragmentManager();
+        FragmentTransaction transaction = fragmentManager.beginTransaction();
+        transaction.addToBackStack(null);
+        transaction.add(R.id.fragment_container, fragment, "BLANK_FRAGMENT").commit();
+    }
 
+    @Override
+    public void onFragmentInteraction(Uri uri) {
+        onBackPressed();
+    }
 
     @Override
     protected void onResume() {
         super.onResume();
         registerReceiver(mRobotUpdateReceiver, makeRobotUpdateIntentFilter());
-        if (mPSoCBleRobotService != null) {
-            final boolean result = mPSoCBleRobotService.connect(mDeviceAddress);
+        if (mBleGolfballService != null) {
+            final boolean result = mBleGolfballService.connect(mDeviceAddress);
             Log.i(TAG, "Connect request result=" + result);
         }
     }
@@ -256,7 +338,7 @@ public class ControlActivity extends AppCompatActivity {
     protected void onDestroy() {
         super.onDestroy();
         unbindService(mServiceConnection);
-        mPSoCBleRobotService = null;
+        mBleGolfballService = null;
     }
 
 
@@ -266,10 +348,10 @@ public class ControlActivity extends AppCompatActivity {
 
 
     /**
-     * Handle broadcasts from the Car service object. The events are:
-     * ACTION_CONNECTED: connected to the car.
-     * ACTION_DISCONNECTED: disconnected from the car.
-     * ACTION_DATA_AVAILABLE: received data from the car.  This can be a result of a read
+     * Handle broadcasts from the ball service object. The events are:
+     * ACTION_CONNECTED: connected to the ball.
+     * ACTION_DISCONNECTED: disconnected from the ball.
+     * ACTION_DATA_AVAILABLE: received data from the ball.  This can be a result of a read
      * or notify operation.
      */
     private final BroadcastReceiver mRobotUpdateReceiver = new BroadcastReceiver() {
@@ -277,7 +359,7 @@ public class ControlActivity extends AppCompatActivity {
         public void onReceive(Context context, Intent intent) {
             final String action = intent.getAction();
             switch (action) {
-                case PSoCBleRobotService.ACTION_CONNECTED:
+                case BleGolfballService.ACTION_CONNECTED:
                     // No need to do anything here. Service discovery is started by the service.
                     playingBluetoothDisconnected = 0;
 
@@ -296,7 +378,7 @@ public class ControlActivity extends AppCompatActivity {
 
 
                     break;
-                case PSoCBleRobotService.ACTION_DISCONNECTED:
+                case BleGolfballService.ACTION_DISCONNECTED:
                     /**mPSoCBleRobotService.close();*/
 
                     bluetoothDiconnectFlag = 1;
@@ -309,27 +391,60 @@ public class ControlActivity extends AppCompatActivity {
                             bluetoothdisconnected.start();
                         }
                     }
-                    mPSoCBleRobotService.connect(mDeviceAddress);
+                    mBleGolfballService.connect(mDeviceAddress);
                     break;
-                case PSoCBleRobotService.ACTION_DATA_AVAILABLE:
+                case BleGolfballService.ACTION_DATA_AVAILABLE:
                     // This is called after a Notify completes
-                    mLastMissedText.setText(String.format("%d", (PSoCBleRobotService.getTach(PSoCBleRobotService.Motor.LEFT) / 2)));
-                    mTachRightText.setText(String.format("%d", PSoCBleRobotService.getTach(PSoCBleRobotService.Motor.RIGHT)));
-                    mTachMiddleText.setText(String.format("%d", PSoCBleRobotService.getTach(PSoCBleRobotService.Motor.MIDDLE)));
+                    //mLastMissedText.setText(String.format("%d", (BleGolfballService.getTach(BleGolfballService.Motor.LEFT) / 2)));
+                    mTachRightText.setText(String.format("%d", BleGolfballService.getTach(BleGolfballService.Motor.RIGHT)));
+                    mTachMiddleText.setText(String.format("%d", BleGolfballService.getTach(BleGolfballService.Motor.MIDDLE)));
+
+
+                    double puttRollDistance = (double) BleGolfballService.getTach(BleGolfballService.Motor.LEFT) * 0.22;
+                    double puttRollDistanceRound = Math.round(puttRollDistance * 100) / 100D;
+                    double puttRollDistanceCompensated = Math.round(puttRollDistance * 100 * 1.1)/ 100D;
+                    int puttRollDistanceRoundforSpeech = (int) Math.round(puttRollDistanceRound);
+                    String textputtRollDistance = Double.toString(puttRollDistanceRound);
+                    String textputtRollDistanceCompensated = Double.toString(puttRollDistanceCompensated);
+
+                    int numberRolls = (BleGolfballService.getTach(BleGolfballService.Motor.LEFT));
 
 
 
-
-
-
-                    double longestMadeDistance = (double) PSoCBleRobotService.getTach(PSoCBleRobotService.Motor.BOTTOM)/10.0;
+                    double longestMadeDistance = (double) BleGolfballService.getTach(BleGolfballService.Motor.BOTTOM)/10.0;
                     double longestMadeDistanceRound = Math.round(longestMadeDistance * 100) / 100D;
+
+                    if(longestMadeDistanceRound != longestMadeDistanceOld && numberRolls > 2 ){
+
+                        if (longestMadeDistanceRound > longestMadeDistanceOld){
+                            longestMadeDistanceMax = longestMadeDistanceRound;
+                        }
+
+
+
+                        PuttData puttData = new PuttData(System.currentTimeMillis(),"Michael",puttNumber,longestMadeDistanceRound,puttRollDistanceCompensated,2,9.5,
+                                false,3.0,12.0,1.0, "test");
+
+                        puttViewModel.insert(puttData);
+
+
+
+
+
+                        longestMadeDistanceOld = longestMadeDistanceRound;
+                    }
+
+
                     String textlongestMadeDistance = Double.toString(longestMadeDistanceRound);
                     mTachBottomText.setText(textlongestMadeDistance);
 
+                    String textlongestMadeDistanceMax = Double.toString(longestMadeDistanceMax);
+                    mvelocityMax.setText(textlongestMadeDistanceMax);
 
-                   /** mputtMadeText.setText(String.format("%d", PSoCBleRobotService.getTach(PSoCBleRobotService.Motor.PUTTMADE)));*/
-                    int ballStartRoll =  (PSoCBleRobotService.getTach(PSoCBleRobotService.Motor.PUTTMADE));
+
+
+                   /** mputtMadeText.setText(String.format("%d", BleGolfballService.getTach(BleGolfballService.Motor.PUTTMADE)));*/
+                    int ballStartRoll =  (BleGolfballService.getTach(BleGolfballService.Motor.PUTTMADE));
                     if (ballStartRoll == 0 && longestMadeDistance == 0.0){
                         ballStoppedFlag = 1;
                     }
@@ -340,23 +455,16 @@ public class ControlActivity extends AppCompatActivity {
                         playingSoundStroke = 0;
                     }
 
-                    mPowerText.setText(String.format("%d", PSoCBleRobotService.getTach(PSoCBleRobotService.Motor.POWER)));
+                    mPowerText.setText(String.format("%d", BleGolfballService.getTach(BleGolfballService.Motor.POWER)));
 
-                    maxAccelx = (Math.abs(102.0 - (double) PSoCBleRobotService.getTach(PSoCBleRobotService.Motor.MIDDLE)) / 19.6);
-                    maxAccely = (Math.abs(102.0 - (double) PSoCBleRobotService.getTach(PSoCBleRobotService.Motor.RIGHT)) / 19.6);
-                    maxAccelz = (Math.abs(125.0 - (double) PSoCBleRobotService.getTach(PSoCBleRobotService.Motor.BOTTOM)) / 20.5);
+                    maxAccelx = (Math.abs(102.0 - (double) BleGolfballService.getTach(BleGolfballService.Motor.MIDDLE)) / 19.6);
+                    maxAccely = (Math.abs(102.0 - (double) BleGolfballService.getTach(BleGolfballService.Motor.RIGHT)) / 19.6);
+                    maxAccelz = (Math.abs(125.0 - (double) BleGolfballService.getTach(BleGolfballService.Motor.BOTTOM)) / 20.5);
 
                     xzVector = Math.sqrt((maxAccelx * maxAccelx) + (maxAccelz * maxAccelz));
 
 
-                    double puttRollDistance = (double) PSoCBleRobotService.getTach(PSoCBleRobotService.Motor.LEFT) * 0.22;
-                    double puttRollDistanceRound = Math.round(puttRollDistance * 100) / 100D;
-                    double puttRollDistanceCompensated = Math.round(puttRollDistance * 100 * 1.1)/ 100D;
-                    int puttRollDistanceRoundforSpeech = (int) Math.round(puttRollDistanceRound);
-                    String textputtRollDistance = Double.toString(puttRollDistanceRound);
-                    String textputtRollDistanceCompensated = Double.toString(puttRollDistanceCompensated);
 
-                    int numberRolls = (PSoCBleRobotService.getTach(PSoCBleRobotService.Motor.LEFT));
 
 
                     if (ballStoppedFlag == 0 && numberRolls >2) {
@@ -395,6 +503,8 @@ public class ControlActivity extends AppCompatActivity {
 
                             badReadingFlag = 0;
                             puttMadeFlag = 0;
+
+                            puttNumber ++;
 
                             playingReadySound = 1;
 
@@ -810,14 +920,14 @@ public class ControlActivity extends AppCompatActivity {
 
 
 
-                    puttVelocity = (double)(PSoCBleRobotService.getTach(PSoCBleRobotService.Motor.VELOCITY)/1);
+                    puttVelocity = (double)(BleGolfballService.getTach(BleGolfballService.Motor.VELOCITY)/1);
                     /*double puttVelocityRound = Math.round(puttVelocity*100)/100D;
                     String textputtVelocity = Double.toString(puttVelocityRound);
                     mVelocityText.setText(puttVelocity);*/
 
-                    mVelocityText.setText(String.format("%d", PSoCBleRobotService.getTach(PSoCBleRobotService.Motor.VELOCITY)));
+                    mVelocityText.setText(String.format("%d", BleGolfballService.getTach(BleGolfballService.Motor.VELOCITY)));
 
-                    int puttMade = (PSoCBleRobotService.getTach(PSoCBleRobotService.Motor.VELOCITY));
+                    int puttMade = (BleGolfballService.getTach(BleGolfballService.Motor.VELOCITY));
 
 
                     if (puttMade != puttMadeOld){
@@ -826,13 +936,39 @@ public class ControlActivity extends AppCompatActivity {
                         final MediaPlayer cheersound = MediaPlayer.create(getApplicationContext(), R.raw.cheerloud);
                         cheersound.start();
 
+
+
                         puttMadeFlag = 1;
+                        /*puttIsMade = true;*/
+
+                        PuttData puttData = new PuttData(1,"Michael",puttNumber,longestMadeDistanceRound,puttRollDistanceCompensated,2,9.5,
+                                true,3.0,12.0,1.0,
+                                "stopped");
+
+                        puttViewModel.insert(puttData);
+
+
+
+
+
 
                     }
 
-                    puttMadeOld = (PSoCBleRobotService.getTach(PSoCBleRobotService.Motor.VELOCITY));
+                    puttMadeOld = (BleGolfballService.getTach(BleGolfballService.Motor.VELOCITY));
+
+                    if (ballStoppedFlag == 1){
+                        velocityFallOff = (longestMadeDistanceMax/puttRollDistanceCompensated);
+                        double velocityFallOffRound = Math.round(velocityFallOff * 100) / 100D;
+                        if(puttRollDistanceCompensated == 0){
+                            velocityFallOffRound = 0;
+                        }
+
+                        String velocityFallOffText = Double.toString(velocityFallOffRound);
 
 
+                        mVelocityFallOff.setText((velocityFallOffText));
+
+                    }
 
 
 
@@ -855,9 +991,9 @@ public class ControlActivity extends AppCompatActivity {
      */
     private static IntentFilter makeRobotUpdateIntentFilter() {
         final IntentFilter intentFilter = new IntentFilter();
-        intentFilter.addAction(PSoCBleRobotService.ACTION_CONNECTED);
-        intentFilter.addAction(PSoCBleRobotService.ACTION_DISCONNECTED);
-        intentFilter.addAction(PSoCBleRobotService.ACTION_DATA_AVAILABLE);
+        intentFilter.addAction(BleGolfballService.ACTION_CONNECTED);
+        intentFilter.addAction(BleGolfballService.ACTION_DISCONNECTED);
+        intentFilter.addAction(BleGolfballService.ACTION_DATA_AVAILABLE);
         return intentFilter;
     }
 
@@ -871,7 +1007,11 @@ public class ControlActivity extends AppCompatActivity {
             String item = parent.getItemAtPosition(position).toString();
             Toast.makeText(parent.getContext(), "Selected: " + item, Toast.LENGTH_LONG).show();
             // An item was selected. You can retrieve the selected item using
-            // parent.getItemAtPosition(pos)
+
+            //parent.getItemAtPosition(position);
+
+
+
         }
 
         public void onNothingSelected(AdapterView<?> parent) {

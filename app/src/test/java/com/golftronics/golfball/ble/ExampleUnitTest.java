@@ -1,4 +1,4 @@
-package com.cypress.academy.ble101_robot;
+package com.golftronics.golfball.ble;
 
 import org.junit.Test;
 

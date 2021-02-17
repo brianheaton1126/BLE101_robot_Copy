@@ -1,16 +1,11 @@
 /*
-Copyright (c) 2016, Cypress Semiconductor Corporation
+Copyright (c) 2020, Golftronics, LLC
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
-modification, are permitted provided that the following conditions are met:
+modification, is not permitted.
 
-* Redistributions of source code must retain the above copyright notice, this
-  list of conditions and the following disclaimer.
-
-* Redistributions in binary form must reproduce the above copyright notice,
-  this list of conditions and the following disclaimer in the documentation
-  and/or other materials provided with the distribution.
+*
 
 THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
 AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
@@ -24,11 +19,10 @@ OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 
-For more information on Cypress BLE products visit:
-http://www.cypress.com/products/bluetooth-low-energy-ble
+
  */
 
-package com.cypress.academy.ble101_robot;
+package com.golftronics.golfball.ble;
 
 import android.app.Service;
 import android.bluetooth.BluetoothAdapter;
@@ -53,9 +47,9 @@ import java.util.UUID;
 /**
  * Service for managing connection and data communication with the BLE car
  */
-public class PSoCBleRobotService extends Service {
+public class    BleGolfballService extends Service {
 
-    private final static String TAG = PSoCBleRobotService.class.getSimpleName();
+    private final static String TAG = BleGolfballService.class.getSimpleName();
 
     public enum Motor { LEFT, RIGHT, MIDDLE, BOTTOM, VELOCITY, PUTTMADE, POWER}
 
@@ -112,18 +106,18 @@ public class PSoCBleRobotService extends Service {
 
     // Actions used during broadcasts to the activity
     public static final String ACTION_CONNECTED =
-            "com.cypress.academy.ble101_robot.ACTION_GATT_CONNECTED";
+            "com.golftronics.golfball.ble.ACTION_GATT_CONNECTED";
     public static final String ACTION_DISCONNECTED =
-            "com.cypress.academy.ble101_robot.ACTION_GATT_DISCONNECTED";
+            "com.golftronics.golfball.ble.ACTION_GATT_DISCONNECTED";
     public static final String ACTION_DATA_AVAILABLE =
-            "com.cypress.academy.ble101_robot.ACTION_DATA_AVAILABLE";
+            "com.golftronics.golfball.ble.ACTION_DATA_AVAILABLE";
 
     /**
      * This is a binder for the BluetoothLeService
      */
     public class LocalBinder extends Binder {
-        PSoCBleRobotService getService() {
-            return PSoCBleRobotService.this;
+        BleGolfballService getService() {
+            return BleGolfballService.this;
         }
     }
 
@@ -553,6 +547,6 @@ public class PSoCBleRobotService extends Service {
      * @return the motor service UUID
      */
     public static UUID getMotorServiceUUID() {
-        return UUID.fromString(PSoCBleRobotService.motorServiceUUID);
+        return UUID.fromString(BleGolfballService.motorServiceUUID);
     }
 }

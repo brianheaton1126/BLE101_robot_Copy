@@ -1,16 +1,9 @@
 /*
-Copyright (c) 2016, Cypress Semiconductor Corporation
+Copyright (c) 2020, Golftronics, LLC
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
-modification, are permitted provided that the following conditions are met:
-
-* Redistributions of source code must retain the above copyright notice, this
-  list of conditions and the following disclaimer.
-
-* Redistributions in binary form must reproduce the above copyright notice,
-  this list of conditions and the following disclaimer in the documentation
-  and/or other materials provided with the distribution.
+modification is not permitted
 
 THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
 AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
@@ -24,11 +17,10 @@ OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 
-For more information on Cypress BLE products visit:
-http://www.cypress.com/products/bluetooth-low-energy-ble
+
  */
 
-package com.cypress.academy.ble101_robot;
+package com.golftronics.golfball.ble;
 
 import android.Manifest;
 import android.annotation.TargetApi;
@@ -270,7 +262,7 @@ public class ScanActivity extends AppCompatActivity {
             }, SCAN_TIMEOUT);
 
             mScanning = true;
-            UUID[] motorServiceArray = {PSoCBleRobotService.getMotorServiceUUID()};
+            UUID[] motorServiceArray = {BleGolfballService.getMotorServiceUUID()};
             if (Build.VERSION.SDK_INT < Build.VERSION_CODES.LOLLIPOP) {
                 //noinspection
                 mBluetoothAdapter.startLeScan(motorServiceArray, mLeScanCallback);
@@ -283,7 +275,7 @@ public class ScanActivity extends AppCompatActivity {
                         .build();
                 filters = new ArrayList<>();
                 // We will scan just for the CAR's UUID
-                ParcelUuid PUuid = new ParcelUuid(PSoCBleRobotService.getMotorServiceUUID());
+                ParcelUuid PUuid = new ParcelUuid(BleGolfballService.getMotorServiceUUID());
                 ScanFilter filter = new ScanFilter.Builder().setServiceUuid(PUuid).build();
                 filters.add(filter);
                 mLEScanner.startScan(filters, settings, mScanCallback);
